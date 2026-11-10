@@ -2,7 +2,7 @@
 // Proyecto IoT - UNAD
 // Conexion a la base de datos MySQL
 
-$config = require __DIR__ . '/../config_privada.php';
+$config = require dirname(__DIR__, 2) . '/config_privada.php';
 
 try {
     $conexion = new PDO(
