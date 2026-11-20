@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitoreo IoT - UNAD</title>
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f1f5f9;
+    color: #1e293b;
+}
+header {
+    background: #123b62;
+    color: white;
+    padding: 25px;
+    text-align: center;
+}
+header h1 { margin: 0 0 8px; }
+header p { margin: 0; }
+main {
+    max-width: 1100px;
+    margin: 25px auto;
+    padding: 0 15px;
+}
+.cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+.card, .panel {
+    background: white;
+    border-radius: 10px;
+    padding: 22px;
+    box-shadow: 0 2px 8px #00000012;
+}
+.card h3 {
+    margin: 0;
+    color: #64748b;
+}
+.valor {
+    font-size: 34px;
+    font-weight: bold;
+    margin: 15px 0 5px;
+    color: #123b62;
+}
+.panel { margin-top: 20px; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 1px solid #e2e8f0;
+}
+th { background: #e2e8f0; }
+
+.tabla {
+    max-height: 270px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+}
+
+.tabla table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.tabla thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #e2e8f0;
+}
+
+.tabla::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+
+.tabla::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 5px;
+}
+
+.tabla::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+#estado { margin-bottom: 15px; }
+.error { color: #b91c1c; }
+footer {
+    text-align: center;
+    padding: 25px;
+    color: #64748b;
+}
+@media(max-width: 650px) {
+    .cards { grid-template-columns: 1fr; }
+}
+
+
+.estado-calidad {
+    padding: 18px;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    border-left: 6px solid;
+}
+
+.estado-calidad strong {
+    font-size: 19px;
+}
+
+.estado-calidad p {
+    margin-bottom: 0;
+}
+
+.estado-normal {
+    background: #dcfce7;
+    border-color: #16a34a;
+    color: #166534;
+}
+
+.estado-alerta {
+    background: #fee2e2;
+    border-color: #dc2626;
+    color: #991b1b;
+}
+
+.estado-sin-datos {
+    background: #e2e8f0;
+    border-color: #64748b;
+    color: #334155;
+}
+
+.estado-desactualizado {
+    background: #fef3c7;
+    border-color: #d97706;
+    color: #92400e;
+}
+
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header>
+    <h1>Monitoreo IoT de Calidad del Agua</h1>
+    <p>Proyecto de grado - UNAD</p>
+</header>
+
+<main>
+    <section class="panel" style="margin-top:0; margin-bottom:20px;">
+        <label for="selectorDispositivo">
+            <strong>Dispositivo de monitoreo</strong>
+        </label>
+
+        <select id="selectorDispositivo"
+                disabled
+                style="display:block; width:100%; max-width:450px;
+                       padding:10px; margin-top:10px;
+                       border:1px solid #cbd5e1; border-radius:6px;">
+            <option value="">Cargando dispositivos...</option>
+        </select>
+    </section>
+    <p id="estado">Consultando mediciones...</p>
+
+    <div id="estadoCalidad" class="estado-calidad estado-sin-datos">
+        <strong id="tituloCalidad">Estado de los parámetros: sin datos</strong>
+        <p id="detalleCalidad">
+            Esperando información de los sensores.
+        </p>
+    </div>
+
+    <section class="cards">
+        <div class="card">
+            <h3>pH</h3>
+            <div class="valor" id="ph">--</div>
+            <span>Escala de pH</span>
+        </div>
+        <div class="card">
+            <h3>Turbidez</h3>
+            <div class="valor" id="turbidez">--</div>
+            <span>NTU</span>
+        </div>
+        <div class="card">
+            <h3>Temperatura</h3>
+            <div class="valor" id="temperatura">--</div>
+            <span>°C</span>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Gráficas de monitoreo</h2>
+
+        <div style="height:250px">
+            <canvas id="graficaPH"></canvas>
+        </div>
+
+        <div style="height:250px">
+            <canvas id="graficaTurbidez"></canvas>
+        </div>
+
+        <div style="height:250px">
+            <canvas id="graficaTemperatura"></canvas>
+        </div>
+    </section>
+
+
+    <section class="panel">
+        <h2>Alertas de calidad del agua</h2>
+
+        <p id="estadoAlertas">Consultando alertas...</p>
+
+        <div class="tabla">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Dispositivo</th>
+                        <th>Parámetro</th>
+                        <th>Descripción</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaAlertas"></tbody>
+            </table>
+        </div>
+    </section>
+
+
+    <section class="panel">
+        <h2>Historial de mediciones</h2>
+        <div class="tabla">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Dispositivo</th>
+                        <th>pH</th>
+                        <th>Turbidez</th>
+                        <th>Temperatura</th>
+                    </tr>
+                </thead>
+                <tbody id="historial"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section id="seccionHistorial" style="margin: 30px auto; max-width: 1000px; padding: 20px; background: white; border-radius: 10px;">
+        <h2>Historial de calidad del agua</h2>
+
+        <p>Seleccione el período que desea consultar.</p>
+
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+            <div>
+                <label for="fechaInicio">Fecha inicial</label>
+                <input type="date" id="fechaInicio">
+            </div>
+
+            <div>
+                <label for="fechaFin">Fecha final</label>
+                <input type="date" id="fechaFin">
+            </div>
+
+            <button type="button" id="btnConsultarHistorial">
+                Consultar historial
+            </button>
+        </div>
+
+        <p id="mensajeHistorial" role="status"></p>
+
+        <div style="position: relative; height: 350px;">
+            <canvas id="graficaHistorial"></canvas>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    Sistema IoT de calidad del agua - UNAD 2026
+</footer>
+
+<script>
+    const API = 'api/consultar_mediciones.php';
+    const graficas = {};
+
+    const selectorDispositivo =
+        document.getElementById('selectorDispositivo');
+
+    let versionDispositivo = 0;
+
+    function dispositivoSeleccionado() {
+        return selectorDispositivo.value;
+    }
+
+    async function cargarDispositivos() {
+        try {
+            const respuesta = await fetch(
+                'api/consultar_dispositivos.php',
+                { cache: 'no-store' }
+            );
+
+            if (!respuesta.ok) {
+                throw new Error('Error HTTP ' + respuesta.status);
+            }
+
+            const datos = await respuesta.json();
+
+            if (datos.estado !== 'correcto' ||
+                !Array.isArray(datos.dispositivos)) {
+                throw new Error('Respuesta de dispositivos inválida');
+            }
+
+            selectorDispositivo.replaceChildren();
+
+            datos.dispositivos.forEach(dispositivo => {
+                const opcion = document.createElement('option');
+
+                opcion.value = dispositivo.id;
+                opcion.textContent =
+                    dispositivo.nombre + ' - ' + dispositivo.ubicacion;
+
+                selectorDispositivo.appendChild(opcion);
+            });
+
+            if (datos.dispositivos.length === 0) {
+                const opcion = document.createElement('option');
+                opcion.value = '';
+                opcion.textContent = 'No hay dispositivos activos';
+                selectorDispositivo.appendChild(opcion);
+                return;
+            }
+
+            const fisico = datos.dispositivos.find(
+                dispositivo => Number(dispositivo.id) === 2
+            );
+
+            selectorDispositivo.value = fisico
+                ? String(fisico.id)
+                : String(datos.dispositivos[0].id);
+
+            selectorDispositivo.disabled = false;
+            cambiarDispositivo();
+
+        } catch (error) {
+            console.error(error);
+            selectorDispositivo.replaceChildren();
+
+            const opcion = document.createElement('option');
+            opcion.value = '';
+            opcion.textContent = 'Error cargando dispositivos';
+            selectorDispositivo.appendChild(opcion);
+
+            document.getElementById('estado').textContent =
+                'No fue posible cargar los dispositivos';
+        }
+    }
+
+
+    function limpiarDashboard() {
+        document.getElementById('ph').textContent = '--';
+        document.getElementById('turbidez').textContent = '--';
+        document.getElementById('temperatura').textContent = '--';
+
+        document.getElementById('historial').replaceChildren();
+        document.getElementById('tablaAlertas').replaceChildren();
+
+        document.getElementById('estado').textContent =
+            'Consultando mediciones...';
+
+        document.getElementById('estado').classList.remove('error');
+
+        document.getElementById('estadoAlertas').textContent =
+            'Consultando alertas...';
+
+        document.getElementById('estadoAlertas').classList.remove('error');
+
+        document.getElementById('estadoCalidad').className =
+            'estado-calidad estado-sin-datos';
+
+        document.getElementById('tituloCalidad').textContent =
+            'Estado de los parámetros: sin datos';
+
+        document.getElementById('detalleCalidad').textContent =
+            'Esperando información del dispositivo seleccionado.';
+
+        Object.values(graficas).forEach(grafica => {
+            grafica.data.labels = [];
+            grafica.data.datasets[0].data = [];
+            grafica.update();
+        });
+
+        if (graficaHistorial) {
+            graficaHistorial.destroy();
+            graficaHistorial = null;
+        }
+
+        document.getElementById('mensajeHistorial').textContent =
+            'Seleccione un período para consultar este dispositivo.';
+    }
+
+    function cambiarDispositivo() {
+        versionDispositivo++;
+        limpiarDashboard();
+
+        if (!dispositivoSeleccionado()) return;
+
+        actualizar();
+        actualizarAlertas();
+    }
+
+    selectorDispositivo.addEventListener('change', cambiarDispositivo);
+
+
+
+    function medicionDesactualizada(fechaMedicion) {
+
+        // MySQL entrega la fecha como YYYY-MM-DD HH:mm:ss
+        const fecha = new Date(fechaMedicion.replace(" ", "T"));
+
+        if (Number.isNaN(fecha.getTime())) {
+            return true;
+        }
+
+        const ahora = new Date();
+        const diferenciaSegundos =
+            (ahora.getTime() - fecha.getTime()) / 1000;
+
+        return diferenciaSegundos > 60 || diferenciaSegundos < -60;
+    }
+
+    async function actualizarEstadoCalidad(medicion, version) {
+
+        const contenedor = document.getElementById("estadoCalidad");
+        const titulo = document.getElementById("tituloCalidad");
+        const detalle = document.getElementById("detalleCalidad");
+
+        
+        if (medicionDesactualizada(medicion.fecha)) {
+
+            contenedor.className =
+                "estado-calidad estado-desactualizado";
+
+            titulo.textContent = "⚠ Monitoreo sin datos recientes";
+
+            detalle.textContent =
+                "La última medición corresponde a " +
+                medicion.fecha +
+                ". No se puede confirmar el estado actual del agua.";
+
+            return;
+        }
+
+
+        try {
+            const respuesta = await fetch(
+                "api/consultar_limites.php",
+                { cache: "no-store" }
+            );
+
+            if (!respuesta.ok) {
+                throw new Error("No se pudieron consultar los límites");
+            }
+
+            const datos = await respuesta.json();
+
+            if (version !== versionDispositivo) return;
+
+            if (datos.estado !== "correcto" || !datos.limites) {
+                throw new Error("Respuesta de límites inválida");
+            }
+
+            const limites = datos.limites;
+
+            const ph = Number(medicion.ph);
+            const turbidez = Number(medicion.turbidez);
+
+            const phMin = Number(limites.ph_min);
+            const phMax = Number(limites.ph_max);
+            const turbidezMax = Number(limites.turbidez_max);
+
+            if (![ph, turbidez, phMin, phMax, turbidezMax]
+                .every(Number.isFinite)) {
+                throw new Error("Valores inválidos");
+            }
+
+            const problemas = [];
+
+            if (ph < phMin || ph > phMax) {
+                problemas.push("pH fuera del rango configurado");
+            }
+
+            if (turbidez > turbidezMax) {
+                problemas.push("Turbidez superior al límite");
+            }
+
+            contenedor.className = "estado-calidad";
+
+            if (problemas.length === 0) {
+                contenedor.classList.add("estado-normal");
+                titulo.textContent = "✓ Parámetros dentro de los límites";
+                detalle.textContent =
+                    "La última medición cumple los límites configurados de pH y turbidez.";
+            } else {
+                contenedor.classList.add("estado-alerta");
+                titulo.textContent = "⚠ Parámetros fuera de los límites";
+                detalle.textContent = problemas.join(". ") + ".";
+            }
+
+        } catch (error) {
+            if (version !== versionDispositivo) return;
+            contenedor.className = "estado-calidad estado-sin-datos";
+            titulo.textContent = "Estado no disponible";
+            detalle.textContent = error.message;
+            console.error(error);
+        }
+    }
+
+
+    function dibujarGrafica(id, etiqueta, valores, fechas) {
+
+        if (graficas[id]) {
+            graficas[id].data.labels = fechas;
+            graficas[id].data.datasets[0].data = valores;
+            graficas[id].update();
+            return;
+        }
+
+        graficas[id] = new Chart(
+            document.getElementById(id),
+            {
+                type: 'line',
+                data: {
+                    labels: fechas,
+                    datasets: [{
+                        label: etiqueta,
+                        data: valores,
+                        borderColor: '#1479b8',
+                        backgroundColor: 'rgba(20,121,184,0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            }
+        );
+    }
+
+
+    async function actualizar() {
+        const estado = document.getElementById('estado');
+        const idDispositivo = dispositivoSeleccionado();
+
+        if (!idDispositivo) return;
+
+        const version = versionDispositivo;
+
+        try {
+            const respuesta = await fetch(
+                API + '?dispositivo_id=' + encodeURIComponent(idDispositivo),
+                { cache: 'no-store' }
+            );
+
+            if (!respuesta.ok) {
+                throw new Error('Error HTTP ' + respuesta.status);
+            }
+
+            const datos = await respuesta.json();
+
+            if (version !== versionDispositivo) return;
+
+            if (datos.estado !== 'correcto' ||
+                !Array.isArray(datos.mediciones)) {
+                throw new Error('Respuesta no valida');
+            }
+
+            const mediciones = datos.mediciones;
+            const historial = document.getElementById('historial');
+            historial.replaceChildren();
+
+            if (mediciones.length === 0) {
+                limpiarMediciones();
+                estado.textContent = 'Sin mediciones registradas';
+                return;
+            }
+
+            const ultima = mediciones[0];
+            actualizarEstadoCalidad(ultima, version);
+
+            const ordenadas = [...mediciones].reverse();
+
+            const fechas = ordenadas.map(m => m.fecha);
+
+            dibujarGrafica(
+                'graficaPH',
+                'pH',
+                ordenadas.map(m => Number(m.ph)),
+                fechas
+            );
+
+            dibujarGrafica(
+                'graficaTurbidez',
+                'Turbidez (NTU)',
+                ordenadas.map(m => Number(m.turbidez)),
+                fechas
+            );
+
+            dibujarGrafica(
+                'graficaTemperatura',
+                'Temperatura (°C)',
+                ordenadas.map(m => Number(m.temperatura)),
+                fechas
+            );
+
+            document.getElementById('ph').textContent = ultima.ph;
+            document.getElementById('turbidez').textContent =
+                ultima.turbidez;
+            document.getElementById('temperatura').textContent =
+                ultima.temperatura;
+
+            mediciones.forEach(m => {
+                const fila = document.createElement('tr');
+
+                [
+                    m.fecha,
+                    m.dispositivo,
+                    m.ph,
+                    m.turbidez,
+                    m.temperatura
+                ].forEach(valor => {
+                    const celda = document.createElement('td');
+                    celda.textContent = valor ?? '';
+                    fila.appendChild(celda);
+                });
+
+                historial.appendChild(fila);
+            });
+
+            estado.classList.remove('error');
+            estado.textContent =
+                'Conectado | Dispositivo: ' + ultima.dispositivo +
+                ' | Ultima medicion: ' + ultima.fecha;
+
+        } catch (error) {
+            if (version !== versionDispositivo) return;
+            estado.classList.add('error');
+            estado.textContent =
+                'No fue posible actualizar las mediciones';
+            console.error(error);
+        }
+    }
+
+
+    async function actualizarAlertas() {
+
+        const estado = document.getElementById('estadoAlertas');
+        const tabla = document.getElementById('tablaAlertas');
+
+        const idDispositivo = dispositivoSeleccionado();
+
+        if (!idDispositivo) return;
+
+        const version = versionDispositivo;
+
+        try {
+            const respuesta = await fetch(
+                'api/consultar_alertas.php?dispositivo_id=' +
+                encodeURIComponent(idDispositivo),
+                { cache: 'no-store' }
+            );
+
+            if (!respuesta.ok) {
+                throw new Error('Error HTTP ' + respuesta.status);
+            }
+
+            const datos = await respuesta.json();
+
+            if (version !== versionDispositivo) return;
+
+            if (datos.estado !== 'correcto' ||
+                !Array.isArray(datos.alertas)) {
+                throw new Error('Respuesta invalida');
+            }
+
+            tabla.replaceChildren();
+
+            if (datos.alertas.length === 0) {
+                estado.textContent = 'No hay alertas registradas';
+                estado.classList.remove('error');
+                return;
+            }
+
+            estado.textContent =
+                'Total de alertas consultadas: ' + datos.total;
+
+            estado.classList.remove('error');
+
+            datos.alertas.forEach(alerta => {
+
+                const fila = document.createElement('tr');
+
+                [
+                    alerta.fecha,
+                    alerta.dispositivo,
+                    alerta.parametro,
+                    alerta.mensaje
+                ].forEach(valor => {
+
+                    const celda = document.createElement('td');
+                    celda.textContent = valor ?? '';
+                    fila.appendChild(celda);
+
+                });
+
+                tabla.appendChild(fila);
+            });
+
+        } catch (error) {
+            if (version !== versionDispositivo) return;
+            estado.classList.add('error');
+            estado.textContent =
+                'No fue posible consultar las alertas';
+
+            console.error(error);
+        }
+    }
+
+
+    function limpiarMediciones() {
+        document.getElementById('ph').textContent = '--';
+        document.getElementById('turbidez').textContent = '--';
+        document.getElementById('temperatura').textContent = '--';
+
+        document.getElementById('historial').replaceChildren();
+
+        document.getElementById('estadoCalidad').className =
+            'estado-calidad estado-sin-datos';
+
+        document.getElementById('tituloCalidad').textContent =
+            'Estado de los parámetros: sin datos';
+
+        document.getElementById('detalleCalidad').textContent =
+            'Este dispositivo todavía no tiene mediciones registradas.';
+
+        Object.values(graficas).forEach(grafica => {
+            grafica.data.labels = [];
+            grafica.data.datasets[0].data = [];
+            grafica.update();
+        });
+    }
+
+
+    // Cargar dispositivos al iniciar el dashboard
+    cargarDispositivos();
+
+    // Mantener actualización automática cada 5 segundos
+    setInterval(() => {
+        if (dispositivoSeleccionado()) {
+            actualizar();
+            actualizarAlertas();
+        }
+    }, 5000);
+
+
+
+</script>
+
+<script>
+    let graficaHistorial = null;
+
+        document.getElementById("btnConsultarHistorial")
+            .addEventListener("click", consultarHistorial);
+
+        async function consultarHistorial() {
+
+            const inicio = document.getElementById("fechaInicio").value;
+            const fin = document.getElementById("fechaFin").value;
+            const mensaje = document.getElementById("mensajeHistorial");
+
+            const idDispositivo = dispositivoSeleccionado();
+            const version = versionDispositivo;
+
+            if (!idDispositivo) {
+                mensaje.textContent = 'Seleccione un dispositivo.';
+                return;
+            }
+
+            if (!inicio || !fin) {
+                mensaje.textContent = "Seleccione ambas fechas.";
+                return;
+            }
+
+            if (inicio > fin) {
+                mensaje.textContent = "La fecha inicial no puede superar la final.";
+                return;
+            }
+
+            mensaje.textContent = "Consultando mediciones...";
+
+            try {
+
+                const url = "api/consultar_historial.php?inicio=" +
+                encodeURIComponent(inicio) +
+                "&fin=" + encodeURIComponent(fin) +
+                "&dispositivo_id=" + encodeURIComponent(idDispositivo);
+
+                const respuesta = await fetch(url, { cache: "no-store" });
+                const datos = await respuesta.json();
+                if (version !== versionDispositivo) return;
+
+                if (!respuesta.ok || datos.estado !== "correcto") {
+                    throw new Error(datos.mensaje || "Error al consultar historial");
+                }
+
+                const mediciones = datos.mediciones;
+
+                mensaje.textContent =
+                    "Mediciones encontradas: " + datos.total +
+                    (datos.total === datos.limite_consulta
+                        ? " (máximo de consulta alcanzado)"
+                        : "");
+
+                const etiquetas = mediciones.map(m => m.fecha);
+
+                const ph = mediciones.map(m => Number(m.ph));
+                const turbidez = mediciones.map(m => Number(m.turbidez));
+                const temperatura = mediciones.map(m => Number(m.temperatura));
+
+                if (graficaHistorial) {
+                    graficaHistorial.destroy();
+                }
+
+                const contexto = document.getElementById("graficaHistorial");
+
+                graficaHistorial = new Chart(contexto, {
+                    type: "line",
+                    data: {
+                        labels: etiquetas,
+                        datasets: [
+                            {
+                                label: "pH",
+                                data: ph,
+                                borderColor: "#2563eb",
+                                tension: 0.2,
+                                pointRadius: 2
+                            },
+                            {
+                                label: "Turbidez (NTU)",
+                                data: turbidez,
+                                borderColor: "#dc2626",
+                                tension: 0.2,
+                                pointRadius: 2
+                            },
+                            {
+                                label: "Temperatura (°C)",
+                                data: temperatura,
+                                borderColor: "#16a34a",
+                                tension: 0.2,
+                                pointRadius: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: "index",
+                            intersect: false
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    maxTicksLimit: 8
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                if (version !== versionDispositivo) return;
+                mensaje.textContent = "Error: " + error.message;
+            }
+        }
+</script>
+
+</body>
+</html>

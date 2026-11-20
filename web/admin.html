@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración - Calidad del Agua</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 20px;
+            color: #1e293b;
+        }
+
+        .contenedor {
+            max-width: 520px;
+            margin: 50px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            text-align: center;
+            color: #075985;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 11px;
+            margin-top: 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+            background: #0284c7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:hover {
+            background: #0369a1;
+        }
+
+        .salir {
+            background: #dc2626;
+        }
+
+        .salir:hover {
+            background: #b91c1c;
+        }
+
+        .mensaje {
+            text-align: center;
+            margin-top: 15px;
+            font-weight: bold;
+            min-height: 20px;
+        }
+
+        .oculto {
+            display: none;
+        }
+
+        .enlace {
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="contenedor">
+
+    <h2>Administración del sistema IoT</h2>
+
+    <div id="panelLogin">
+
+        <form id="formLogin">
+
+            <label for="usuario">Usuario</label>
+            <input type="text" id="usuario" required autocomplete="username">
+
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" required autocomplete="current-password">
+
+            <button type="submit">Iniciar sesión</button>
+
+        </form>
+
+    </div>
+
+    <div id="panelAdmin" class="oculto">
+
+        <h3>Configuración de límites</h3>
+
+        <p>Establezca los valores utilizados para generar alertas.</p>
+
+        <form id="formLimites">
+
+            <label for="phMin">pH mínimo</label>
+            <input type="number" id="phMin" min="0" max="14"
+                   step="0.01" required>
+
+            <label for="phMax">pH máximo</label>
+            <input type="number" id="phMax" min="0" max="14"
+                   step="0.01" required>
+
+            <label for="turbidezMax">Turbidez máxima (NTU)</label>
+            <input type="number" id="turbidezMax" min="0"
+                   step="0.01" required>
+
+            <button type="submit">Guardar límites</button>
+
+        </form>
+
+        <button type="button" class="salir" id="btnSalir">
+            Cerrar sesión
+        </button>
+
+    </div>
+
+    <div id="mensaje" class="mensaje" role="status" aria-live="polite"></div>
+
+    <div class="enlace">
+        <a href="index.html">Volver al monitoreo público</a>
+    </div>
+
+</div>
+
+<script>
+
+const API = "api/";
+
+const panelLogin = document.getElementById("panelLogin");
+const panelAdmin = document.getElementById("panelAdmin");
+const mensaje = document.getElementById("mensaje");
+
+function mostrarMensaje(texto, error = false) {
+    mensaje.textContent = texto;
+    mensaje.style.color = error ? "#dc2626" : "#15803d";
+}
+
+function mostrarPanel(autenticado) {
+    panelLogin.classList.toggle("oculto", autenticado);
+    panelAdmin.classList.toggle("oculto", !autenticado);
+}
+
+async function solicitarJSON(archivo, opciones = {}) {
+
+    const respuesta = await fetch(API + archivo, {
+        credentials: "same-origin",
+        cache: "no-store",
+        ...opciones
+    });
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+        const error = new Error(datos.mensaje || "Error del servidor");
+        error.status = respuesta.status;
+        throw error;
+    }
+
+    return datos;
+}
+
+async function cargarLimites() {
+
+    const datos = await solicitarJSON("consultar_limites.php");
+
+    document.getElementById("phMin").value = datos.limites.ph_min;
+    document.getElementById("phMax").value = datos.limites.ph_max;
+    document.getElementById("turbidezMax").value = datos.limites.turbidez_max;
+}
+
+async function verificarSesion() {
+
+    try {
+
+        await solicitarJSON("verificar_sesion.php");
+
+        mostrarPanel(true);
+        await cargarLimites();
+
+    } catch (error) {
+
+        mostrarPanel(false);
+
+        if (error.status !== 401) {
+            mostrarMensaje(error.message, true);
+        }
+    }
+}
+
+document.getElementById("formLogin").addEventListener(
+    "submit",
+    async function(evento) {
+
+        evento.preventDefault();
+
+        const usuario = document.getElementById("usuario").value;
+        const password = document.getElementById("password").value;
+
+        try {
+
+            await solicitarJSON("login.php", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ usuario, password })
+            });
+
+            document.getElementById("password").value = "";
+
+            mostrarPanel(true);
+            await cargarLimites();
+
+            mostrarMensaje("Sesión iniciada correctamente");
+
+        } catch (error) {
+
+            mostrarMensaje(error.message, true);
+        }
+    }
+);
+
+document.getElementById("formLimites").addEventListener(
+    "submit",
+    async function(evento) {
+
+        evento.preventDefault();
+
+        const ph_min = Number(document.getElementById("phMin").value);
+        const ph_max = Number(document.getElementById("phMax").value);
+        const turbidez_max = Number(
+            document.getElementById("turbidezMax").value
+        );
+
+        if (ph_min >= ph_max) {
+            mostrarMensaje(
+                "El pH mínimo debe ser menor que el máximo",
+                true
+            );
+            return;
+        }
+
+        try {
+
+            await solicitarJSON("actualizar_limites.php", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    ph_min,
+                    ph_max,
+                    turbidez_max
+                })
+            });
+
+            mostrarMensaje("Límites actualizados correctamente");
+
+            await cargarLimites();
+
+        } catch (error) {
+
+            if (error.status === 401) {
+                mostrarPanel(false);
+            }
+
+            mostrarMensaje(error.message, true);
+        }
+    }
+);
+
+document.getElementById("btnSalir").addEventListener(
+    "click",
+    async function() {
+
+        try {
+
+            await solicitarJSON("logout.php", {
+                method: "POST"
+            });
+
+            mostrarPanel(false);
+            document.getElementById("formLogin").reset();
+
+            mostrarMensaje("Sesión cerrada correctamente");
+
+        } catch (error) {
+
+            mostrarMensaje(error.message, true);
+        }
+    }
+);
+
+verificarSesion();
+
+</script>
+
+</body>
+</html>
