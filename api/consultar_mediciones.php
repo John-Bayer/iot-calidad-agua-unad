@@ -7,12 +7,28 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 
 require_once __DIR__ . '/conexion.php';
 
+// Dispositivo solicitado desde el dashboard
+$idDispositivo = filter_input(
+    INPUT_GET,
+    'dispositivo_id',
+    FILTER_VALIDATE_INT
+);
+
+if ($idDispositivo === false || $idDispositivo === null || $idDispositivo < 1) {
+    http_response_code(400);
+    echo json_encode([
+        'estado' => 'error',
+        'mensaje' => 'ID de dispositivo invalido'
+    ]);
+    exit;
+}
+
 try {
     $sql = "
         SELECT
             m.id,
             m.dispositivo_id,
-            d.nombre AS dispositivo,
+            d.ubicacion AS dispositivo,
             m.ph,
             m.turbidez,
             m.temperatura,
@@ -20,11 +36,15 @@ try {
         FROM mediciones m
         INNER JOIN dispositivos d
             ON d.id = m.dispositivo_id
+        WHERE m.dispositivo_id = :dispositivo_id
         ORDER BY m.fecha DESC, m.id DESC
         LIMIT 50
     ";
 
-    $consulta = $conexion->query($sql);
+    $consulta = $conexion->prepare($sql);
+    $consulta->execute([
+        ':dispositivo_id' => $idDispositivo
+    ]);
     $mediciones = $consulta->fetchAll();
 
     echo json_encode([

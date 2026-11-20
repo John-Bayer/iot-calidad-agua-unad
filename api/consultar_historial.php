@@ -19,6 +19,21 @@ require_once __DIR__ . '/conexion.php';
 $fechaInicio = $_GET['inicio'] ?? '';
 $fechaFin = $_GET['fin'] ?? '';
 
+$idDispositivo = filter_input(
+    INPUT_GET,
+    'dispositivo_id',
+    FILTER_VALIDATE_INT
+);
+
+if ($idDispositivo === false || $idDispositivo === null || $idDispositivo < 1) {
+    http_response_code(400);
+    echo json_encode([
+        'estado' => 'error',
+        'mensaje' => 'ID de dispositivo invalido'
+    ]);
+    exit;
+}
+
 // Validar formato YYYY-MM-DD
 function validarFecha($fecha) {
     $d = DateTime::createFromFormat('!Y-m-d', $fecha);
@@ -63,14 +78,16 @@ try {
 
     $sql = "SELECT *
             FROM mediciones
-            WHERE fecha_hora >= :inicio
-              AND fecha_hora < :fin
-            ORDER BY fecha_hora ASC
+            WHERE dispositivo_id = :dispositivo_id
+              AND fecha >= :inicio
+              AND fecha < :fin
+            ORDER BY fecha ASC
             LIMIT 1000";
 
     $consulta = $conexion->prepare($sql);
 
     $consulta->execute([
+        ':dispositivo_id' => $idDispositivo,
         ':inicio' => $inicio,
         ':fin' => $fin
     ]);

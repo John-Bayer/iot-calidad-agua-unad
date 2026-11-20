@@ -118,9 +118,9 @@ try {
         'estado' => 'correcto',
         'mensaje' => 'Limites actualizados',
         'limites' => [
-            'ph_min' => $phMin,
-            'ph_max' => $phMax,
-            'turbidez_max' => $turbidezMax
+            'ph_min' => round($phMin, 2),
+            'ph_max' => round($phMax, 2),
+            'turbidez_max' => round($turbidezMax, 2)
         ]
     ], JSON_UNESCAPED_UNICODE);
 

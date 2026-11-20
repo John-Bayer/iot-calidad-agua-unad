@@ -1,3 +1,4 @@
+
 <?php
 // Proyecto IoT - UNAD
 // Consulta de limites configurados

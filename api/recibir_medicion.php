@@ -1,4 +1,3 @@
-
 <?php
 // Proyecto IoT - UNAD
 // Recepcion de mediciones del ESP32
@@ -64,6 +63,27 @@ if ($id === false || $id < 1 ||
 require_once __DIR__ . '/conexion.php';
 
 try {
+    
+    // Consultar limites configurados en la base de datos
+    $sqlLimites = "SELECT ph_min, ph_max, turbidez_max
+                   FROM configuracion_limites
+                   WHERE id = 1";
+
+    $consultaLimites = $conexion->query($sqlLimites);
+    $limites = $consultaLimites->fetch(PDO::FETCH_ASSOC);
+
+    if (!$limites) {
+        throw new PDOException(
+            'No existe configuracion de limites'
+        );
+    }
+
+    $phMin = (float) $limites['ph_min'];
+    $phMax = (float) $limites['ph_max'];
+    $turbidezMax = (float) $limites['turbidez_max'];
+
+    $conexion->beginTransaction();
+
     $sql = "INSERT INTO mediciones
             (dispositivo_id, ph, turbidez, temperatura)
             VALUES (:id, :ph, :turbidez, :temperatura)";
@@ -77,16 +97,67 @@ try {
         ':temperatura' => $temperatura
     ]);
 
+    
+    // Identificar la medicion almacenada
+    $medicionId = $conexion->lastInsertId();
+
+    // Evaluar parametros de calidad del agua
+    $alertas = [];
+
+    if ($ph < $phMin || $ph > $phMax) {
+        $alertas[] = [
+            'parametro' => 'ph',
+            'mensaje' => 'pH fuera del rango de referencia: ' . $ph
+        ];
+    }
+
+    if ($turbidez > $turbidezMax) {
+        $alertas[] = [
+            'parametro' => 'turbidez',
+            'mensaje' => 'Turbidez superior al limite de referencia: '
+                . $turbidez . ' NTU'
+        ];
+    }
+
+    // Registrar alertas generadas
+    if (count($alertas) > 0) {
+
+        $sqlAlerta = "INSERT INTO alertas
+                      (medicion_id, parametro, mensaje)
+                      VALUES (:medicion_id, :parametro, :mensaje)";
+
+        $consultaAlerta = $conexion->prepare($sqlAlerta);
+
+        foreach ($alertas as $alerta) {
+            $consultaAlerta->execute([
+                ':medicion_id' => $medicionId,
+                ':parametro' => $alerta['parametro'],
+                ':mensaje' => $alerta['mensaje']
+            ]);
+        }
+    }
+
+    // Confirmar medicion y alertas
+    $conexion->commit();
+
     echo json_encode([
         'estado' => 'correcto',
         'mensaje' => 'Medicion almacenada',
-        'medicion_id' => $conexion->lastInsertId()
-    ]);
+        'medicion_id' => $medicionId,
+        'total_alertas' => count($alertas),
+        'alertas' => $alertas
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
+
+    if ($conexion->inTransaction()) {
+        $conexion->rollBack();
+    }
+
     error_log('Error al almacenar medicion: ' . $e->getMessage());
 
     http_response_code(500);
+
     echo json_encode([
         'estado' => 'error',
         'mensaje' => 'No fue posible almacenar la medicion'
