@@ -9,7 +9,7 @@
 // ======================================
 
 const char* WIFI_SSID = "Bayer";
-const char* WIFI_PASSWORD = "Bayer2019.!";
+const char* WIFI_PASSWORD = "*********";
 
 const char* API_URL =
     "http://10.254.200.2/iot-calidad-agua-unad/api/recibir_medicion.php";
